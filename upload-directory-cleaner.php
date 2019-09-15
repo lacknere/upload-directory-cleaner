@@ -1,12 +1,14 @@
 <?php
 /**
- * Plugin Name:     Upload Directory Cleaner
- * Description:     The UDC plugin allows you to scan and delete all unregistered files from your Wordpress upload directory.
- * Version:         1.0
- * Author:          Elias Lackner
- * Author URI:      elias-lackner.at
- * License:         GPL v2 or later
- * License URI:     https://www.gnu.org/licenses/gpl-2.0.html
+ * Plugin Name:         Upload Directory Cleaner
+ * Description:         The UDC plugin allows you to scan and delete all unregistered files from your Wordpress upload directory.
+ * Version:             1.0
+ * Requires at least:   2.9
+ * Requires PHP:        5.4
+ * Author:              Elias Lackner
+ * Author URI:          elias-lackner.at
+ * License:             GPL v2 or later
+ * License URI:         https://www.gnu.org/licenses/gpl-2.0.html
  */
 
 class UDC {
