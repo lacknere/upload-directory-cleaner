@@ -130,6 +130,16 @@ class UDC {
         return self::$instance;
     }
 
+    // Installation
+    static function install()
+    {
+        mkdir(__DIR__ . '/logs');
+        mkdir(__DIR__ . '/logs/scan');
+        mkdir(__DIR__ . '/logs/unregistered');
+        mkdir(__DIR__ . '/logs/delete');
+    }
+
+    // Add Page To Tools Submenu
     public function add_page_to_tools_submenu()
     {
         add_management_page(
@@ -554,6 +564,8 @@ class UDC {
 }
 
 $UDC = UDC::getInstance();
+
+register_activation_hook(__FILE__, ['UDC', 'install']);
 
 // Helpers
 function in_array_r($needle, $haystack, $strict = false) {
