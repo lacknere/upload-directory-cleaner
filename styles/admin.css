@@ -1,0 +1,34 @@
+#udc textarea {
+    width: 100%;
+}
+
+#udc .float-right {
+    float: right;
+}
+
+#udc .udc-flex-container {
+    display: flex;
+    align-items: flex-start;
+}
+
+#udc .udc-box {
+    flex: 1;
+    margin: 1em;
+    padding: 1em;
+    background: #ffffff;
+    box-shadow: 0 1px 1px 0 rgba(0,0,0,.1);
+}
+
+#udc .udc-box > *:first-child {
+    margin-top: 0;
+}
+
+#udc .udc-setting-description {
+    font-weight: normal;
+}
+
+#udc .udc-log-window {
+    width: 100%;
+    height: 250px;
+    background-color: #ffffff;
+}
