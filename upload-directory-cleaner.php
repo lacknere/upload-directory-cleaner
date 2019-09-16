@@ -12,14 +12,19 @@
  */
 
 class UDC {
-    // Constants & Variables
+    ///////////////////////////
+    // Constants & Variables //
+    ///////////////////////////
+
     const ACTION_SAVE_SETTINGS = 'save_settings';
     const ACTION_ARCHIVE_DIRECTORY = 'archive_directory';
     const ACTION_SCAN_DIRECTORY = 'scan_directory';
     const ACTION_DELETE_FILES = 'delete_files';
     
-    const SCAN_RESULT_REGISTERED_FILE = 'SCAN_RESULT_REGISTERED_FILE';
-    const SCAN_RESULT_UNREGISTERED_FILE = 'SCAN_RESULT_UNREGISTERED_FILE';
+    const SCAN_RESULT_REGISTERED_FILE = 1;
+    const SCAN_RESULT_UNREGISTERED_FILE = 2;
+
+    private $system_max_input_vars;
 
     private $settings = [
         'udc_keep_thumbnails' => [
@@ -60,74 +65,36 @@ class UDC {
             'sanitize' => ['filter_var', FILTER_SANITIZE_NUMBER_INT],
         ],
         'udc_keep_thumbnails' => [
-            'sanitize' => ['rest_sanitize_boolean'],
+            'sanitize' => ['filter_var', FILTER_VALIDATE_BOOLEAN],
         ],
         'udc_delete_empty_directories' => [
-            'sanitize' => ['rest_sanitize_boolean'],
+            'sanitize' => ['filter_var', FILTER_VALIDATE_BOOLEAN],
         ],
         'udc_ignore' => [
             'sanitize' => ['sanitize_text_field'],
         ],
     ];
 
+    private $user_input;
+    private $scan_excludes;
+
     private $plugin_dir_path;
     private $plugin_dir_url;
+    private $public_upload_dir_path;
+    private $system_upload_dir_path;
+    private $scan_log_file_url;
+    private $unregistered_log_file_path;
+    private $delete_log_file_url;
 
-    private $user_input;
-    private $public_upload_dir;
-    private $system_upload_dir;
-    private $scan_excludes;
     private $direct_iterator_items;
     private $recursive_iterator_items;
     private $file_count = 0;
-
     private $registered_file_paths = [];
-    private $scan_log_file_url;
-    private $unregistered_log_file_path;
     private $unregistered_files = [];
-    private $system_max_input_vars;
 
-    private $delete_log_file_url;
-
-    // Getters
-    private function get_user_input()
-    {
-        $sanitized_user_input = [];
-
-        foreach($this->user_inputs as $user_input_key => $user_input) {
-            $is_array = $user_input['is_array'];
-            $sanitize = $user_input['sanitize'];
-            $input_data = $_POST[$user_input_key];
-
-            if($is_array) {
-                $sanitized_user_input[$user_input_key] = [];
-
-                foreach ($input_data as $data_key => $data) {
-                    $sanitized_user_input[$user_input_key][$data_key] = call_user_func($sanitize[0], $data, $sanitize[1]);
-                }
-            } else {
-                $sanitized_user_input[$user_input_key] = call_user_func($sanitize[0], $input_data, $sanitize[1]);
-            }
-        }
-
-        return $sanitized_user_input;
-    }
-
-    private function get_keep_thumbnails_description()
-    {
-        return 'Registered Thumbnail Sizes: ' . implode(', ', $this->get_image_sizes());
-    }
-
-    private function get_unregistered_files_size()
-    {
-        $unregistered_files_size = 0;
-
-        foreach($this->unregistered_files as $file) {
-            $unregistered_files_size += $file->getSize();
-        }
-
-        return $unregistered_files_size;
-    }
+    /////////////
+    // Getters //
+    /////////////
 
     private function get_action()
     {
@@ -152,6 +119,22 @@ class UDC {
         return $excludes;
     }
 
+    private function get_unregistered_files_size()
+    {
+        $unregistered_files_size = 0;
+
+        foreach($this->unregistered_files as $file) {
+            $unregistered_files_size += $file->getSize();
+        }
+
+        return $unregistered_files_size;
+    }
+
+    private function get_keep_thumbnails_description()
+    {
+        return 'Registered Thumbnail Sizes: ' . implode(', ', $this->get_image_sizes());
+    }
+
     private function get_image_sizes()
     {
         global $_wp_additional_image_sizes;
@@ -164,11 +147,57 @@ class UDC {
         return $image_sizes;
     }
 
-    private function get_recursive_iterator_items()
+    /////////////
+    // Setters //
+    /////////////
+
+    private function set_settings()
     {
-        return new RecursiveIteratorIterator(
+        foreach($this->settings as $setting_name => $setting) {
+            add_option($setting_name, $setting['default_value']);
+            $setting['value'] = get_option($setting_name, $setting['default_value']);
+            $this->settings[$setting_name] = $setting;
+        }
+    }
+
+    private function set_user_input()
+    {
+        $sanitized_user_input = [];
+
+        foreach($this->user_inputs as $user_input_key => $user_input) {
+            $is_array = $user_input['is_array'];
+            $sanitize = $user_input['sanitize'];
+            $input_data = $_POST[$user_input_key];
+
+            if($is_array) {
+                $sanitized_user_input[$user_input_key] = [];
+
+                foreach ($input_data as $data_key => $data) {
+                    $sanitized_user_input[$user_input_key][$data_key] = call_user_func($sanitize[0], $data, $sanitize[1]);
+                }
+            } else {
+                $sanitized_user_input[$user_input_key] = call_user_func($sanitize[0], $input_data, $sanitize[1]);
+            }
+        }
+
+        $this->user_input = $sanitized_user_input;
+    }
+
+    private function set_scan_excludes()
+    {
+        $this->scan_excludes = array_merge($this->user_input['excludes'], [$this->system_upload_dir_path . '/sites']);
+    }
+
+    private function set_direct_iterator_items()
+    {
+        $this->direct_iterator_items = new DirectoryIterator($this->system_upload_dir_path);
+    }
+
+    private function set_recursive_iterator_items()
+    {
+        $this->recursive_iterator_items =  new RecursiveIteratorIterator(
             new RecursiveCallbackFilterIterator(
-                new RecursiveDirectoryIterator($this->system_upload_dir, RecursiveDirectoryIterator::SKIP_DOTS),
+                new RecursiveDirectoryIterator($this->system_upload_dir_path, RecursiveDirectoryIterator::SKIP_DOTS),
                 function($item, $key, $iterator) {
                     if($this->get_action() == self::ACTION_ARCHIVE_DIRECTORY) {
                         return true;
@@ -181,7 +210,32 @@ class UDC {
         );
     }
 
-    // Constructor
+    private function set_file_count()
+    {
+        foreach($this->recursive_iterator_items as $item) {
+            if($item->isFile())
+                $this->file_count++;
+        }
+    }
+
+    //////////////////
+    // Installation //
+    //////////////////
+
+    static function install()
+    {
+        mkdir(__DIR__ . '/logs');
+        mkdir(__DIR__ . '/logs/scan');
+        mkdir(__DIR__ . '/logs/unregistered');
+        mkdir(__DIR__ . '/logs/delete');
+    }
+
+    //////////////////////////////
+    // Constructor & Singleton //
+    //////////////////////////////
+
+    private static $instance = false;
+
     private function __construct()
     {
         $this->plugin_dir_path = plugin_dir_path(__FILE__);
@@ -191,9 +245,6 @@ class UDC {
         add_action('admin_menu', [$this, 'add_page_to_tools_submenu']);
     }
 
-    // Singleton
-    static $instance = false;
-
     public static function get_instance()
     {
         if(!self::$instance)
@@ -201,16 +252,21 @@ class UDC {
         return self::$instance;
     }
 
-    // Installation
-    static function install()
+    ////////////////////
+    // Initialization //
+    ////////////////////
+
+    // -- Include Styles and Scripts
+    public function include_styles_and_scripts($hook)
     {
-        mkdir(__DIR__ . '/logs');
-        mkdir(__DIR__ . '/logs/scan');
-        mkdir(__DIR__ . '/logs/unregistered');
-        mkdir(__DIR__ . '/logs/delete');
+        if($hook != 'tools_page_upload-directory-cleaner')
+            return;
+        
+        wp_register_style('udc_admin_style', $this->plugin_dir_url . 'styles/admin.css');
+        wp_enqueue_style('udc_admin_style');
     }
 
-    // Add Page To Tools Submenu
+    // -- Add Page To Tools Submenu
     public function add_page_to_tools_submenu()
     {
         add_management_page(
@@ -222,22 +278,19 @@ class UDC {
         );
     }
 
-    // Initialization
+    // -- Initialization
     public function init()
     {
-        $this->set_settings();
+        $this->public_upload_dir_path = str_replace(site_url(), '', wp_upload_dir()['baseurl']);
+        $this->system_upload_dir_path = wp_upload_dir()['basedir'];
 
-        $this->user_input = $this->get_user_input();
-        $this->public_upload_dir = str_replace(site_url(), '', wp_upload_dir()['baseurl']);
-        $this->system_upload_dir = wp_upload_dir()['basedir'];
-        $this->scan_excludes = array_merge($this->user_input['excludes'], [$this->system_upload_dir . '/sites']);
-        $this->direct_iterator_items = new DirectoryIterator($this->system_upload_dir);
-        $this->recursive_iterator_items = $this->get_recursive_iterator_items();
-        
-        foreach($this->recursive_iterator_items as $item) {
-            if($item->isFile())
-                $this->file_count++;
-        }
+        $this->set_settings();
+        $this->set_user_input();
+        $this->set_scan_excludes();
+
+        $this->set_direct_iterator_items();
+        $this->set_recursive_iterator_items();
+        $this->set_file_count();
 
         switch($this->get_action()) {
             case self::ACTION_SAVE_SETTINGS:
@@ -258,45 +311,9 @@ class UDC {
         $this->render_page();
     }
 
-    // Set Settings
-    private function set_settings()
-    {
-        foreach($this->settings as $setting_name => $setting) {
-            add_option($setting_name, $setting['default_value']);
-            $setting['value'] = get_option($setting_name, $setting['default_value']);
-            $this->settings[$setting_name] = $setting;
-        }
-    }
-
-    // Include Styles and Scripts
-    public function include_styles_and_scripts($hook)
-    {
-        if($hook != 'tools_page_upload-directory-cleaner')
-            return;
-        
-        wp_register_style('udc_admin_style', $this->plugin_dir_url . 'styles/admin.css');
-        wp_enqueue_style('udc_admin_style');
-    }
-
-    private function delete_empty_directories_r($path, $log_file) {
-        $empty = true;
-        
-        foreach(glob($path . DIRECTORY_SEPARATOR . '*') as $file) {
-            if(preg_match("/(" . $this->get_preg_excludes() . ")/i", $file) === 1) {
-                $empty = false;
-            } else {
-                $empty &= is_dir($file) && $this->delete_empty_directories_r($file, $log_file);
-            }
-        }
-
-        if($empty) {
-            fwrite($log_file, 'Deleting Empty Directory: ' . $path . PHP_EOL);
-        }
-
-        return $empty && rmdir($path);
-    }
-
-    // Actions
+    /////////////
+    // Actions //
+    /////////////
 
     // -- Save Settings
     private function save_settings()
@@ -308,6 +325,21 @@ class UDC {
         }
 
         $this->set_settings();
+    }
+
+    // -- Archive Directory
+    private function archive_directory()
+    {
+        $zip = new ZipArchive();
+        $zip->open($this->system_upload_dir_path . '/udc_archive_' . time() . '.zip', ZipArchive::CREATE | ZipArchive::OVERWRITE);
+
+        foreach($this->recursive_iterator_items as $item) {
+            if(!$item->isDir()) {
+                $zip->addFile($item->getPathname(), substr($item->getPathname(), strlen($this->system_upload_dir_path) + 1));
+            }
+        }
+
+        $zip->close();
     }
 
     // -- Scan Directory
@@ -356,7 +388,7 @@ class UDC {
                 $file_pathname = $item->getPathname();
                 fwrite($scan_log_file, 'Directory File: ' . $file_pathname . PHP_EOL);
                 
-                $scan_result = udc_in_array_r($file_pathname, $this->registered_file_paths) ? self::SCAN_RESULT_REGISTERED_FILE : self::SCAN_RESULT_UNREGISTERED_FILE;
+                $scan_result = $this->in_array_r($file_pathname, $this->registered_file_paths) ? self::SCAN_RESULT_REGISTERED_FILE : self::SCAN_RESULT_UNREGISTERED_FILE;
 
                 switch($scan_result) {
                     case self::SCAN_RESULT_REGISTERED_FILE:
@@ -401,28 +433,15 @@ class UDC {
         $delete_empty_directories = (bool)$this->settings['udc_delete_empty_directories']['value'];
 
         if($delete_empty_directories) {
-            $this->delete_empty_directories_r($this->system_upload_dir, $delete_log_file);
+            $this->delete_empty_directories_r($this->system_upload_dir_path, $delete_log_file);
         }
 
         fclose($delete_log_file);
     }
 
-    // -- Archive Directory
-    private function archive_directory()
-    {
-        $zip = new ZipArchive();
-        $zip->open($this->system_upload_dir . '/udc_archive_' . time() . '.zip', ZipArchive::CREATE | ZipArchive::OVERWRITE);
-
-        foreach($this->recursive_iterator_items as $item) {
-            if(!$item->isDir()) {
-                $zip->addFile($item->getPathname(), substr($item->getPathname(), strlen($this->system_upload_dir) + 1));
-            }
-        }
-
-        $zip->close();
-    }
-
-    // HTML Rendering
+    ////////////////////
+    // HTML Rendering //
+    ////////////////////
 
     // -- Render Page
     private function render_page()
@@ -467,7 +486,7 @@ class UDC {
             <tbody>
                 <tr>
                     <th>Path</th>
-                    <td><?php echo $this->public_upload_dir; ?></td>
+                    <td><?php echo $this->public_upload_dir_path; ?></td>
                 </tr>
                 <tr>
                     <th>All Files</th>
@@ -586,7 +605,7 @@ class UDC {
         <iframe class="udc-log-window" src="<?php echo esc_url($this->scan_log_file_url); ?>"></iframe>
         <p>Scanning finished.</p>
         <h3>Scan Result</h3>
-        <p>There are <?php echo count($this->unregistered_files); ?> unregistered files (<?php echo udc_format_size_units($this->get_unregistered_files_size()); ?>) in the upload directory.<br><strong><?php echo count($this->unregistered_files) > 0 ? 'Unselect all files you do not want to be deleted!' : 'Nice, your upload directory looks clean!'; ?></strong></p>
+        <p>There are <?php echo count($this->unregistered_files); ?> unregistered files (<?php echo $this->format_size_units($this->get_unregistered_files_size()); ?>) in the upload directory.<br><strong><?php echo count($this->unregistered_files) > 0 ? 'Unselect all files you do not want to be deleted!' : 'Nice, your upload directory looks clean!'; ?></strong></p>
         <?php
             if(count($this->unregistered_files) > $this->system_max_input_vars) {
                 ?>
@@ -615,37 +634,61 @@ class UDC {
         <?php $this->render_action_form_html('finish', 'Finish'); ?>
         <?php
     }
+
+    /////////////
+    // Helpers //
+    /////////////
+
+    // -- In Array Recursively
+    function in_array_r($needle, $haystack, $strict = false) {
+        foreach ($haystack as $item) {
+            if (($strict ? $item === $needle : $item == $needle) || (is_array($item) && $this->in_array_r($needle, $item, $strict))) {
+                return true;
+            }
+        }
+    
+        return false;
+    }
+
+    // -- Delete Empty Directories Recursively
+    private function delete_empty_directories_r($path, $log_file) {
+        $empty = true;
+        
+        foreach(glob($path . DIRECTORY_SEPARATOR . '*') as $file) {
+            if(preg_match("/(" . $this->get_preg_excludes() . ")/i", $file) === 1) {
+                $empty = false;
+            } else {
+                $empty &= is_dir($file) && $this->delete_empty_directories_r($file, $log_file);
+            }
+        }
+
+        if($empty) {
+            fwrite($log_file, 'Deleting Empty Directory: ' . $path . PHP_EOL);
+        }
+
+        return $empty && rmdir($path);
+    }
+    
+    // -- Format Size Units
+    function format_size_units($bytes)
+    {
+        if ($bytes >= 1073741824)
+            $bytes = number_format($bytes / 1073741824, 2) . ' GB';
+        elseif ($bytes >= 1048576)
+            $bytes = number_format($bytes / 1048576, 2) . ' MB';
+        elseif ($bytes >= 1024)
+            $bytes = number_format($bytes / 1024, 2) . ' KB';
+        elseif ($bytes > 1)
+            $bytes = $bytes . ' bytes';
+        elseif ($bytes == 1)
+            $bytes = $bytes . ' byte';
+        else
+            $bytes = '0 bytes';
+    
+        return $bytes;
+    }
 }
 
 $UDC = UDC::get_instance();
 
 register_activation_hook(__FILE__, ['UDC', 'install']);
-
-// Helpers
-function udc_in_array_r($needle, $haystack, $strict = false) {
-    foreach ($haystack as $item) {
-        if (($strict ? $item === $needle : $item == $needle) || (is_array($item) && udc_in_array_r($needle, $item, $strict))) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-function udc_format_size_units($bytes)
-{
-    if ($bytes >= 1073741824)
-        $bytes = number_format($bytes / 1073741824, 2) . ' GB';
-    elseif ($bytes >= 1048576)
-        $bytes = number_format($bytes / 1048576, 2) . ' MB';
-    elseif ($bytes >= 1024)
-        $bytes = number_format($bytes / 1024, 2) . ' KB';
-    elseif ($bytes > 1)
-        $bytes = $bytes . ' bytes';
-    elseif ($bytes == 1)
-        $bytes = $bytes . ' byte';
-    else
-        $bytes = '0 bytes';
-
-    return $bytes;
-}
