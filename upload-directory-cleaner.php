@@ -2,7 +2,7 @@
 /**
  * Plugin Name:         Upload Directory Cleaner
  * Description:         The UDC plugin allows you to scan and delete all unregistered files from your Wordpress upload directory.
- * Version:             1.0
+ * Version:             0.1
  * Requires at least:   2.9
  * Requires PHP:        5.4
  * Author:              Elias Lackner
