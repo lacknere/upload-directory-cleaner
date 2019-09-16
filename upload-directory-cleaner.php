@@ -82,12 +82,12 @@ class UDC {
     private $file_count = 0;
 
     private $registered_file_paths = [];
-    private $public_scan_log_file_path;
+    private $scan_log_file_url;
     private $unregistered_log_file_path;
     private $unregistered_files = [];
     private $system_max_input_vars;
 
-    private $public_delete_log_file_path;
+    private $delete_log_file_url;
 
     // Getters
     private function get_user_input()
@@ -344,7 +344,7 @@ class UDC {
 
         $scan_log_file_relative_path = 'logs/scan/udc_scan_' . $log_timestamp . '.log';
         $scan_log_file_path = $this->plugin_dir_path . $scan_log_file_relative_path;
-        $this->public_scan_log_file_path = $this->plugin_dir_url . $scan_log_file_relative_path;
+        $this->scan_log_file_url = $this->plugin_dir_url . $scan_log_file_relative_path;
         $scan_log_file = fopen($scan_log_file_path, 'w');
 
         $unregistered_log_file_relative_path = 'logs/unregistered/udc_unregistered_' . $log_timestamp . '.log';
@@ -389,7 +389,7 @@ class UDC {
 
         $delete_log_file_relative_path = 'logs/delete/udc_delete_' . time() . '.log';
         $delete_log_file_path = $this->plugin_dir_path . $delete_log_file_relative_path;
-        $this->public_delete_log_file_path = $this->plugin_dir_url . $delete_log_file_relative_path;
+        $this->delete_log_file_url = $this->plugin_dir_url . $delete_log_file_relative_path;
         $delete_log_file = fopen($delete_log_file_path, 'w');
 
         foreach($deletes as $delete_i) {
@@ -454,7 +454,7 @@ class UDC {
         <form method="post">
             <input type="hidden" name="action" value="<?php echo $action; ?>" />
             <?php if($function) call_user_func($function) ?>
-            <input class="<?php echo implode(' ', $submit_classes); ?>" type="submit" value="<?php echo $submit_text; ?>" />
+            <input class="<?php echo esc_attr(implode(' ', $submit_classes)); ?>" type="submit" value="<?php echo esc_attr($submit_text); ?>" />
         </form>
         <?php
     }
@@ -480,11 +480,11 @@ class UDC {
                         foreach($this->direct_iterator_items as $file) {
                             $filename = $file->getFilename();
                             if(!$file->isDot() && $filename != 'sites') {
-                                $checked = !((int)$filename > 1900 && (int)$filename < 2100);
+                                $checked = !((int)$filename > 1900 && (int)$filename < (int)date('Y'));
 
                                 ?>
                                 <div>
-                                    <input type="checkbox" name="excludes[]" value="<?php echo $file->getPathname(); ?>" <?php checked($checked) ?>> <?php echo $file->getFilename(); ?>
+                                    <input type="checkbox" name="excludes[]" value="<?php echo esc_attr($file->getPathname()); ?>" <?php checked($checked) ?>> <?php echo $file->getFilename(); ?>
                                 </div>
                                 <?php
                             }
@@ -508,17 +508,17 @@ class UDC {
                     {
                         $setting_value = $setting['value'];
                         $field = [
-                            $setting['type'] != 'textarea' ? '<input type="' . $setting['type'] . '"' : '<textarea',
-                            'name="' . $setting_name . '"',
-                            array_key_exists('placeholder', $setting) ? 'placeholder="' . $setting['placeholder'] . '"' : '',
-                            $setting['type'] != 'checkbox' ? 'value="' . $setting_value . '"' : checked($setting_value, true, false),
-                            $setting['type'] != 'textarea' ? '/>' : '>' . $setting_value . '</textarea>',
+                            $setting['type'] != 'textarea' ? '<input type="' . esc_attr($setting['type']) . '"' : '<textarea',
+                            'name="' . esc_attr($setting_name) . '"',
+                            array_key_exists('placeholder', $setting) ? 'placeholder="' . esc_attr($setting['placeholder']) . '"' : '',
+                            $setting['type'] != 'checkbox' ? 'value="' . esc_attr($setting_value) . '"' : checked($setting_value, true, false),
+                            $setting['type'] != 'textarea' ? '/>' : '>' . esc_html($setting_value) . '</textarea>',
                         ];
 
                         ?>
                             <tr>
                                 <th>
-                                    <label for="<?php echo $setting_name; ?>"><?php echo $setting['title']; ?></label>
+                                    <label for="<?php echo esc_attr($setting_name); ?>"><?php echo $setting['title']; ?></label>
                                     <?php
                                         if($setting['description']) {
                                             $description = call_user_func([$this, $setting['description']]) ? call_user_func([$this, $setting['description']]) : $setting['description'];
@@ -543,8 +543,8 @@ class UDC {
     private function render_delete_form_html()
     {
         ?>
-        <input type="hidden" name="unregistered_log" value="<?php echo $this->unregistered_log_file_path; ?>" />
-        <input type="hidden" name="preg_excludes" value="<?php echo $this->get_preg_excludes(); ?>" />
+        <input type="hidden" name="unregistered_log" value="<?php echo esc_attr($this->unregistered_log_file_path); ?>" />
+        <input type="hidden" name="preg_excludes" value="<?php echo esc_attr($this->get_preg_excludes()); ?>" />
         <?php
         foreach($this->unregistered_files as $index => $file) {
             if($index == $this->system_max_input_vars - 2)
@@ -552,7 +552,7 @@ class UDC {
 
             ?>
             <div>
-                <input type="checkbox" name ="deletes[]" value="<?php echo $index; ?>" <?php checked(true) ?> /> <?php echo $file->getPathname(); ?>
+                <input type="checkbox" name ="deletes[]" value="<?php echo esc_attr($index); ?>" <?php checked(true) ?> /> <?php echo $file->getPathname(); ?>
             </div>
             <?php
         }
@@ -583,7 +583,7 @@ class UDC {
         ?>
         <h3>Directory Scan</h3>
         <p>Scanning <?php echo $this->file_count; ?> files...</p>
-        <iframe class="udc-log-window" src="<?php echo $this->public_scan_log_file_path; ?>"></iframe>
+        <iframe class="udc-log-window" src="<?php echo esc_url($this->scan_log_file_url); ?>"></iframe>
         <p>Scanning finished.</p>
         <h3>Scan Result</h3>
         <p>There are <?php echo count($this->unregistered_files); ?> unregistered files (<?php echo formatSizeUnits($this->get_unregistered_files_size()); ?>) in the upload directory.<br><strong><?php echo count($this->unregistered_files) > 0 ? 'Unselect all files you do not want to be deleted!' : 'Nice, your upload directory looks clean!'; ?></strong></p>
@@ -610,7 +610,7 @@ class UDC {
         ?>
         <h3>Delete Files</h3>
         <p>Deleting <?php echo count($this->user_input['deletes']); ?> files...</p>
-        <iframe class="udc-log-window" src="<?php echo $this->public_delete_log_file_path; ?>"></iframe>
+        <iframe class="udc-log-window" src="<?php echo esc_url($this->delete_log_file_url); ?>"></iframe>
         <p>Deleting finished.</p>
         <?php $this->render_action_form_html('finish', 'Finish'); ?>
         <?php
