@@ -41,6 +41,35 @@ class UDC {
         ],
     ];
 
+    private $user_inputs = [
+        'action' => [
+            'sanitize' => ['sanitize_text_field'],
+        ],
+        'excludes' => [
+            'is_array' => true,
+            'sanitize' => ['sanitize_file_name'],
+        ],
+        'preg_excludes' => [
+            'sanitize' => ['sanitize_text_field'],
+        ],
+        'unregistered_log' => [
+            'sanitize' => ['sanitize_file_name'],
+        ],
+        'deletes' => [
+            'is_array' => true,
+            'sanitize' => ['filter_var', FILTER_SANITIZE_NUMBER_INT],
+        ],
+        'udc_keep_thumbnails' => [
+            'sanitize' => ['rest_sanitize_boolean'],
+        ],
+        'udc_delete_empty_directories' => [
+            'sanitize' => ['rest_sanitize_boolean'],
+        ],
+        'udc_ignore' => [
+            'sanitize' => ['sanitize_text_field'],
+        ],
+    ];
+
     private $plugin_dir_path;
     private $plugin_dir_url;
 
@@ -61,6 +90,29 @@ class UDC {
     private $public_delete_log_file_path;
 
     // Getters
+    private function get_user_input()
+    {
+        $sanitized_user_input = [];
+
+        foreach($this->user_inputs as $user_input_key => $user_input) {
+            $is_array = $user_input['is_array'];
+            $sanitize = $user_input['sanitize'];
+            $input_data = $_POST[$user_input_key];
+
+            if($is_array) {
+                $sanitized_user_input[$user_input_key] = [];
+
+                foreach ($input_data as $data_key => $data) {
+                    $sanitized_user_input[$user_input_key][$data_key] = call_user_func($sanitize[0], $data, $sanitize[1]);
+                }
+            } else {
+                $sanitized_user_input[$user_input_key] = call_user_func($sanitize[0], $input_data, $sanitize[1]);
+            }
+        }
+
+        return $sanitized_user_input;
+    }
+
     private function get_keep_thumbnails_description()
     {
         return 'Registered Thumbnail Sizes: ' . implode(', ', $this->get_image_sizes());
@@ -112,6 +164,23 @@ class UDC {
         return $image_sizes;
     }
 
+    private function get_recursive_iterator_items()
+    {
+        return new RecursiveIteratorIterator(
+            new RecursiveCallbackFilterIterator(
+                new RecursiveDirectoryIterator($this->system_upload_dir, RecursiveDirectoryIterator::SKIP_DOTS),
+                function($item, $key, $iterator) {
+                    if($this->get_action() == self::ACTION_ARCHIVE_DIRECTORY) {
+                        return true;
+                    }
+
+                    return preg_match("/(" . $this->get_preg_excludes() . ")/i", $key) === 0;
+                }
+            ),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+    }
+
     // Constructor
     private function __construct()
     {
@@ -158,24 +227,12 @@ class UDC {
     {
         $this->set_settings();
 
-        $this->user_input = $_SERVER['REQUEST_METHOD'] == 'GET' ? $_GET : $_POST;
+        $this->user_input = $this->get_user_input();
         $this->public_upload_dir = str_replace(site_url(), '', wp_upload_dir()['baseurl']);
         $this->system_upload_dir = wp_upload_dir()['basedir'];
-        $this->scan_excludes = array_merge($this->user_input['excludes'] ?? [], [$this->system_upload_dir . '/sites']);
+        $this->scan_excludes = array_merge($this->user_input['excludes'], [$this->system_upload_dir . '/sites']);
         $this->direct_iterator_items = new DirectoryIterator($this->system_upload_dir);
-        $this->recursive_iterator_items = new RecursiveIteratorIterator(
-            new RecursiveCallbackFilterIterator(
-                new RecursiveDirectoryIterator($this->system_upload_dir, RecursiveDirectoryIterator::SKIP_DOTS),
-                function($item, $key, $iterator) {
-                    if($this->get_action() == self::ACTION_ARCHIVE_DIRECTORY) {
-                        return true;
-                    }
-
-                    return preg_match("/(" . $this->get_preg_excludes() . ")/i", $key) === 0;
-                }
-            ),
-            RecursiveIteratorIterator::SELF_FIRST
-        );
+        $this->recursive_iterator_items = $this->get_recursive_iterator_items();
         
         foreach($this->recursive_iterator_items as $item) {
             if($item->isFile())
@@ -244,15 +301,10 @@ class UDC {
     // -- Save Settings
     private function save_settings()
     {
-        $input_keys = array_keys($this->user_input);
-
         foreach($this->settings as $setting_name => $setting) {
             $input = $this->user_input[$setting_name];
             
-            if($setting['type'] == 'checkbox')
-                $input = in_array($setting_name, $input_keys) ? true : false;
-            
-            update_option($setting_name, $input, false);
+            update_option($setting_name, $input);
         }
 
         $this->set_settings();
