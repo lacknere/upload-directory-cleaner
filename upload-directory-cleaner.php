@@ -11,7 +11,7 @@
  * License URI:         https://www.gnu.org/licenses/gpl-2.0.html
  */
 
-class UDC {
+class UploadDirectoryCleaner {
     ///////////////////////////
     // Constants & Variables //
     ///////////////////////////
@@ -689,6 +689,6 @@ class UDC {
     }
 }
 
-$UDC = UDC::get_instance();
+$UploadDirectoryCleaner = UploadDirectoryCleaner::get_instance();
 
-register_activation_hook(__FILE__, ['UDC', 'install']);
+register_activation_hook(__FILE__, ['UploadDirectoryCleaner', 'install']);
