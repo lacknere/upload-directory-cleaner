@@ -47,13 +47,13 @@ class UDC {
         ],
         'excludes' => [
             'is_array' => true,
-            'sanitize' => ['sanitize_file_name'],
+            'sanitize' => ['sanitize_text_field'],
         ],
         'preg_excludes' => [
             'sanitize' => ['sanitize_text_field'],
         ],
         'unregistered_log' => [
-            'sanitize' => ['sanitize_file_name'],
+            'sanitize' => ['sanitize_text_field'],
         ],
         'deletes' => [
             'is_array' => true,
@@ -194,7 +194,7 @@ class UDC {
     // Singleton
     static $instance = false;
 
-    public static function getInstance()
+    public static function get_instance()
     {
         if(!self::$instance)
             self::$instance = new self;
@@ -217,7 +217,7 @@ class UDC {
             'Upload Directory Cleaner',
             'Upload Directory Cleaner',
             'manage_options',
-            'udc',
+            'upload-directory-cleaner',
             [$this, 'init']
         );
     }
@@ -271,7 +271,7 @@ class UDC {
     // Include Styles and Scripts
     public function include_styles_and_scripts($hook)
     {
-        if($hook != 'tools_page_udc')
+        if($hook != 'tools_page_upload-directory-cleaner')
             return;
         
         wp_register_style('udc_admin_style', $this->plugin_dir_url . 'styles/admin.css');
@@ -356,7 +356,7 @@ class UDC {
                 $file_pathname = $item->getPathname();
                 fwrite($scan_log_file, 'Directory File: ' . $file_pathname . PHP_EOL);
                 
-                $scan_result = in_array_r($file_pathname, $this->registered_file_paths) ? self::SCAN_RESULT_REGISTERED_FILE : self::SCAN_RESULT_UNREGISTERED_FILE;
+                $scan_result = udc_in_array_r($file_pathname, $this->registered_file_paths) ? self::SCAN_RESULT_REGISTERED_FILE : self::SCAN_RESULT_UNREGISTERED_FILE;
 
                 switch($scan_result) {
                     case self::SCAN_RESULT_REGISTERED_FILE:
@@ -480,7 +480,7 @@ class UDC {
                         foreach($this->direct_iterator_items as $file) {
                             $filename = $file->getFilename();
                             if(!$file->isDot() && $filename != 'sites') {
-                                $checked = !((int)$filename > 1900 && (int)$filename < (int)date('Y'));
+                                $checked = !((int)$filename > 1900 && (int)$filename <= (int)date('Y'));
 
                                 ?>
                                 <div>
@@ -586,7 +586,7 @@ class UDC {
         <iframe class="udc-log-window" src="<?php echo esc_url($this->scan_log_file_url); ?>"></iframe>
         <p>Scanning finished.</p>
         <h3>Scan Result</h3>
-        <p>There are <?php echo count($this->unregistered_files); ?> unregistered files (<?php echo formatSizeUnits($this->get_unregistered_files_size()); ?>) in the upload directory.<br><strong><?php echo count($this->unregistered_files) > 0 ? 'Unselect all files you do not want to be deleted!' : 'Nice, your upload directory looks clean!'; ?></strong></p>
+        <p>There are <?php echo count($this->unregistered_files); ?> unregistered files (<?php echo udc_format_size_units($this->get_unregistered_files_size()); ?>) in the upload directory.<br><strong><?php echo count($this->unregistered_files) > 0 ? 'Unselect all files you do not want to be deleted!' : 'Nice, your upload directory looks clean!'; ?></strong></p>
         <?php
             if(count($this->unregistered_files) > $this->system_max_input_vars) {
                 ?>
@@ -617,14 +617,14 @@ class UDC {
     }
 }
 
-$UDC = UDC::getInstance();
+$UDC = UDC::get_instance();
 
 register_activation_hook(__FILE__, ['UDC', 'install']);
 
 // Helpers
-function in_array_r($needle, $haystack, $strict = false) {
+function udc_in_array_r($needle, $haystack, $strict = false) {
     foreach ($haystack as $item) {
-        if (($strict ? $item === $needle : $item == $needle) || (is_array($item) && in_array_r($needle, $item, $strict))) {
+        if (($strict ? $item === $needle : $item == $needle) || (is_array($item) && udc_in_array_r($needle, $item, $strict))) {
             return true;
         }
     }
@@ -632,7 +632,7 @@ function in_array_r($needle, $haystack, $strict = false) {
     return false;
 }
 
-function formatSizeUnits($bytes)
+function udc_format_size_units($bytes)
 {
     if ($bytes >= 1073741824)
         $bytes = number_format($bytes / 1073741824, 2) . ' GB';
