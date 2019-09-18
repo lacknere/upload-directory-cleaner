@@ -25,6 +25,7 @@
 
 #udc .udc-setting-description {
     font-weight: normal;
+    font-size: smaller;
 }
 
 #udc .udc-log-window {

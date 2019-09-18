@@ -29,7 +29,7 @@ class UploadDirectoryCleaner {
     private $settings = [
         'udc_keep_thumbnails' => [
             'title' => 'Keep Thumbnails',
-            'description' => 'get_keep_thumbnails_description',
+            'description' => 'render_keep_thumbnails_description_html',
             'type' => 'checkbox',
             'default_value' => true,
         ],
@@ -78,6 +78,7 @@ class UploadDirectoryCleaner {
     private $user_input;
     private $scan_excludes;
 
+    private $wp_upload_dir;
     private $plugin_dir_path;
     private $plugin_dir_url;
     private $public_upload_dir_path;
@@ -130,18 +131,19 @@ class UploadDirectoryCleaner {
         return $unregistered_files_size;
     }
 
-    private function get_keep_thumbnails_description()
-    {
-        return 'Registered Thumbnail Sizes: ' . implode(', ', $this->get_image_sizes());
-    }
-
     private function get_image_sizes()
     {
+        $default_image_size_keys = get_intermediate_image_sizes();
         global $_wp_additional_image_sizes;
         $image_sizes = [];
-        
-        foreach($_wp_additional_image_sizes as $image_size) {
-            $image_sizes[] = $image_size['width'] . 'x' . $image_size['height'];
+
+        foreach($default_image_size_keys as $image_size_key) {
+            if (in_array($image_size_key, array('thumbnail', 'medium', 'medium_large', 'large'))) {
+                $image_sizes[$image_size_key] = $image_size_key . ' (' . get_option("{$image_size_key}_size_w") . 'x' . get_option("{$image_size_key}_size_h") . ')';
+            }
+        }
+        foreach($_wp_additional_image_sizes as $image_size_key => $image_size) {
+            $image_sizes[$image_size_key] = $image_size_key . ' (' . $image_size['width'] . 'x' . $image_size['height'] . ')';
         }
 
         return $image_sizes;
@@ -150,6 +152,13 @@ class UploadDirectoryCleaner {
     /////////////
     // Setters //
     /////////////
+
+    private function set_upload_dir()
+    {
+        $this->wp_upload_dir = wp_upload_dir();
+        $this->public_upload_dir_path = str_replace(site_url(), '', $this->wp_upload_dir['baseurl']);
+        $this->system_upload_dir_path = $this->wp_upload_dir['basedir'];
+    }
 
     private function set_settings()
     {
@@ -281,8 +290,7 @@ class UploadDirectoryCleaner {
     // -- Initialization
     public function init()
     {
-        $this->public_upload_dir_path = str_replace(site_url(), '', wp_upload_dir()['baseurl']);
-        $this->system_upload_dir_path = wp_upload_dir()['basedir'];
+        $this->set_upload_dir();
 
         $this->set_settings();
         $this->set_user_input();
@@ -355,20 +363,20 @@ class UploadDirectoryCleaner {
 
         if($attachments) {
             foreach($attachments as $attachment) {
-                $registered_file_path = get_attached_file($attachment->ID);
+                $registered_file_paths = [get_attached_file($attachment->ID)];
                 
-                if($keep_thumbnails && count($this->get_image_sizes()) > 0 && substr($attachment->post_mime_type, 0, 5) == 'image') {
-                    $extension_position = strrpos($registered_file_path, '.');
-                    $registered_file_paths_with_thumbnails = [$registered_file_path];
-                    
-                    foreach($this->get_image_sizes() as $image_size) {
-                        $registered_file_paths_with_thumbnails[] = substr($registered_file_path, 0, $extension_position) . '-' . $image_size . substr($registered_file_path, $extension_position);
-                    }
+                if($keep_thumbnails && substr($attachment->post_mime_type, 0, 5) == 'image') {
+                    foreach($this->get_image_sizes() as $image_size_key => $image_size) {
+                        $thumbnail_file_url = wp_get_attachment_image_src($attachment->ID, $image_size_key)[0];
+                        $thumbnail_file_path = str_replace($this->wp_upload_dir['baseurl'], $this->system_upload_dir_path, $thumbnail_file_url);
 
-                    $this->registered_file_paths[] = $registered_file_paths_with_thumbnails;
-                } else {
-                    $this->registered_file_paths[] = $registered_file_path;
+                        if(!in_array($thumbnail_file_path, $registered_file_paths)) {
+                            $registered_file_paths[] = $thumbnail_file_path;
+                        }
+                    }
                 }
+                
+                $this->registered_file_paths[] = $registered_file_paths;
             }
         }
 
@@ -539,12 +547,16 @@ class UploadDirectoryCleaner {
                                 <th>
                                     <label for="<?php echo esc_attr($setting_name); ?>"><?php echo $setting['title']; ?></label>
                                     <?php
-                                        if($setting['description']) {
-                                            $description = call_user_func([$this, $setting['description']]) ? call_user_func([$this, $setting['description']]) : $setting['description'];
+                                        $description = $setting['description'];
 
-                                            ?>
-                                            <br><small class="udc-setting-description"><?php echo $description; ?></small>
-                                            <?php
+                                        if($description) {
+                                            echo '<div class="udc-setting-description">';
+                                            if(method_exists($this, $description)) {
+                                                call_user_func([$this, $description]);
+                                            } else {
+                                                echo "<p>{$description}</p>";
+                                            }
+                                            echo '</div>';
                                         }
                                     ?>
                                 </th>
@@ -632,6 +644,19 @@ class UploadDirectoryCleaner {
         <iframe class="udc-log-window" src="<?php echo esc_url($this->delete_log_file_url); ?>"></iframe>
         <p>Deleting finished.</p>
         <?php $this->render_action_form_html('finish', 'Finish'); ?>
+        <?php
+    }
+
+    // -- Keep Thumbnails Description
+    private function render_keep_thumbnails_description_html()
+    {
+        ?>
+        <strong>Registered Thumbnail Sizes:</strong>
+        <?php
+        foreach($this->get_image_sizes() as $image_size) {
+            echo "<br><span>{$image_size}</span>";
+        }
+        ?>
         <?php
     }
 
