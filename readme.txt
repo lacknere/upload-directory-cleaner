@@ -29,10 +29,17 @@ Features:
 
 == Changelog ==
 
+= 0.2 =
+* Fixed general settings bug.
+* Fixed bug concerning thumbnails.
+
 = 0.1 =
 * Initial Release
 
 == Upgrade Notice ==
+
+= 0.2 =
+If you are experiencing bugs with saving settings and wrong scanning on thumbnails, you should update to this version.
 
 = 0.1 =
 Initial Release
