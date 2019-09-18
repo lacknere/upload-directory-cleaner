@@ -328,6 +328,10 @@ class UploadDirectoryCleaner {
     {
         foreach($this->settings as $setting_name => $setting) {
             $input = $this->user_input[$setting_name];
+
+            if(is_bool($input)) {
+                $input = (int)$input;
+            }
             
             update_option($setting_name, $input);
         }
