@@ -139,11 +139,11 @@ class UploadDirectoryCleaner {
 
         foreach($default_image_size_keys as $image_size_key) {
             if (in_array($image_size_key, array('thumbnail', 'medium', 'medium_large', 'large'))) {
-                $image_sizes[$image_size_key] = $image_size_key . ' (' . get_option("{$image_size_key}_size_w") . 'x' . get_option("{$image_size_key}_size_h") . ')';
+                $image_sizes[$image_size_key] = "{$image_size_key} (".get_option("{$image_size_key}_size_w").'x'.get_option("{$image_size_key}_size_h").')';
             }
         }
         foreach($_wp_additional_image_sizes as $image_size_key => $image_size) {
-            $image_sizes[$image_size_key] = $image_size_key . ' (' . $image_size['width'] . 'x' . $image_size['height'] . ')';
+            $image_sizes[$image_size_key] = "{$image_size_key} ({$image_size['width']}x{$image_size['height']})";
         }
 
         return $image_sizes;
@@ -194,7 +194,7 @@ class UploadDirectoryCleaner {
 
     private function set_scan_excludes()
     {
-        $this->scan_excludes = array_merge($this->user_input['excludes'], [$this->system_upload_dir_path . '/sites']);
+        $this->scan_excludes = array_merge($this->user_input['excludes'], ["{$this->system_upload_dir_path}/sites"]);
     }
 
     private function set_direct_iterator_items()
@@ -212,7 +212,7 @@ class UploadDirectoryCleaner {
                         return true;
                     }
 
-                    return preg_match("/(" . $this->get_preg_excludes() . ")/i", $key) === 0;
+                    return preg_match("/({$this->get_preg_excludes()})/i", $key) === 0;
                 }
             ),
             RecursiveIteratorIterator::SELF_FIRST
@@ -233,10 +233,10 @@ class UploadDirectoryCleaner {
 
     static function install()
     {
-        mkdir(__DIR__ . '/logs');
-        mkdir(__DIR__ . '/logs/scan');
-        mkdir(__DIR__ . '/logs/unregistered');
-        mkdir(__DIR__ . '/logs/delete');
+        mkdir(__DIR__.'/logs');
+        mkdir(__DIR__.'/logs/scan');
+        mkdir(__DIR__.'/logs/unregistered');
+        mkdir(__DIR__.'/logs/delete');
     }
 
     //////////////////////////////
@@ -271,7 +271,7 @@ class UploadDirectoryCleaner {
         if($hook != 'tools_page_upload-directory-cleaner')
             return;
         
-        wp_register_style('udc_admin_style', $this->plugin_dir_url . 'styles/admin.css');
+        wp_register_style('udc_admin_style', "{$this->plugin_dir_url}styles/admin.css");
         wp_enqueue_style('udc_admin_style');
     }
 
@@ -339,7 +339,8 @@ class UploadDirectoryCleaner {
     private function archive_directory()
     {
         $zip = new ZipArchive();
-        $zip->open($this->system_upload_dir_path . '/udc_archive_' . time() . '.zip', ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        $timestamp = time();
+        $zip->open("{$this->system_upload_dir_path}/udc_archive_{$timestamp}.zip", ZipArchive::CREATE | ZipArchive::OVERWRITE);
 
         foreach($this->recursive_iterator_items as $item) {
             if(!$item->isDir()) {
@@ -382,30 +383,30 @@ class UploadDirectoryCleaner {
 
         $log_timestamp = time();
 
-        $scan_log_file_relative_path = 'logs/scan/udc_scan_' . $log_timestamp . '.log';
-        $scan_log_file_path = $this->plugin_dir_path . $scan_log_file_relative_path;
-        $this->scan_log_file_url = $this->plugin_dir_url . $scan_log_file_relative_path;
+        $scan_log_file_relative_path = "logs/scan/udc_scan_{$log_timestamp}.log";
+        $scan_log_file_path = $this->plugin_dir_path.$scan_log_file_relative_path;
+        $this->scan_log_file_url = $this->plugin_dir_url.$scan_log_file_relative_path;
         $scan_log_file = fopen($scan_log_file_path, 'w');
 
-        $unregistered_log_file_relative_path = 'logs/unregistered/udc_unregistered_' . $log_timestamp . '.log';
-        $this->unregistered_log_file_path = $this->plugin_dir_path . $unregistered_log_file_relative_path;
+        $unregistered_log_file_relative_path = "logs/unregistered/udc_unregistered_{$log_timestamp}.log";
+        $this->unregistered_log_file_path = $this->plugin_dir_path.$unregistered_log_file_relative_path;
         $unregistered_log_file = fopen($this->unregistered_log_file_path, 'w');
 
         foreach($this->recursive_iterator_items as $item) {
             if($item->isFile()) {
                 $file_pathname = $item->getPathname();
-                fwrite($scan_log_file, 'Directory File: ' . $file_pathname . PHP_EOL);
+                fwrite($scan_log_file, "Directory File: {$file_pathname}".PHP_EOL);
                 
                 $scan_result = $this->in_array_r($file_pathname, $this->registered_file_paths) ? self::SCAN_RESULT_REGISTERED_FILE : self::SCAN_RESULT_UNREGISTERED_FILE;
 
                 switch($scan_result) {
                     case self::SCAN_RESULT_REGISTERED_FILE:
-                        fwrite($scan_log_file, 'Scan Result: File registered in Media Library.' . PHP_EOL);
+                        fwrite($scan_log_file, 'Scan Result: File registered in Media Library.'.PHP_EOL);
                         break;
                     case self::SCAN_RESULT_UNREGISTERED_FILE:
-                        fwrite($scan_log_file, 'Scan Result: Unregistered File.' . PHP_EOL);
+                        fwrite($scan_log_file, 'Scan Result: Unregistered File.'.PHP_EOL);
                         $this->unregistered_files[] = $item;
-                        fwrite($unregistered_log_file, $file_pathname . PHP_EOL);
+                        fwrite($unregistered_log_file, $file_pathname.PHP_EOL);
                         break;
                     default: break;
                 }
@@ -427,15 +428,17 @@ class UploadDirectoryCleaner {
         $unregistered_filenames = explode(PHP_EOL, fread($unregistered_log_file, filesize($unregistered_log_file_path)));
         fclose($unregistered_log_file);
 
-        $delete_log_file_relative_path = 'logs/delete/udc_delete_' . time() . '.log';
-        $delete_log_file_path = $this->plugin_dir_path . $delete_log_file_relative_path;
-        $this->delete_log_file_url = $this->plugin_dir_url . $delete_log_file_relative_path;
+        $log_timestamp = time();
+
+        $delete_log_file_relative_path = "logs/delete/udc_delete_{$log_timestamp}.log";
+        $delete_log_file_path = $this->plugin_dir_path.$delete_log_file_relative_path;
+        $this->delete_log_file_url = $this->plugin_dir_url.$delete_log_file_relative_path;
         $delete_log_file = fopen($delete_log_file_path, 'w');
 
         foreach($deletes as $delete_i) {
             $filename = $unregistered_filenames[$delete_i];
             unlink($filename);
-            fwrite($delete_log_file, 'Deleting File: ' . $filename . PHP_EOL);
+            fwrite($delete_log_file, "Deleting File: {$filename}".PHP_EOL);
         }
 
         $delete_empty_directories = (bool)$this->settings['udc_delete_empty_directories']['value'];
@@ -535,11 +538,11 @@ class UploadDirectoryCleaner {
                     {
                         $setting_value = $setting['value'];
                         $field = [
-                            $setting['type'] != 'textarea' ? '<input type="' . esc_attr($setting['type']) . '"' : '<textarea',
-                            'name="' . esc_attr($setting_name) . '"',
-                            array_key_exists('placeholder', $setting) ? 'placeholder="' . esc_attr($setting['placeholder']) . '"' : '',
-                            $setting['type'] != 'checkbox' ? 'value="' . esc_attr($setting_value) . '"' : checked($setting_value, true, false),
-                            $setting['type'] != 'textarea' ? '/>' : '>' . esc_html($setting_value) . '</textarea>',
+                            $setting['type'] != 'textarea' ? '<input type="'.esc_attr($setting['type']).'"' : '<textarea',
+                            'name="'.esc_attr($setting_name).'"',
+                            array_key_exists('placeholder', $setting) ? 'placeholder="'.esc_attr($setting['placeholder']).'"' : '',
+                            $setting['type'] != 'checkbox' ? 'value="'.esc_attr($setting_value).'"' : checked($setting_value, true, false),
+                            $setting['type'] != 'textarea' ? '/>' : '>'.esc_html($setting_value).'</textarea>',
                         ];
 
                         ?>
@@ -679,8 +682,8 @@ class UploadDirectoryCleaner {
     private function delete_empty_directories_r($path, $log_file) {
         $empty = true;
         
-        foreach(glob($path . DIRECTORY_SEPARATOR . '*') as $file) {
-            if(preg_match("/(" . $this->get_preg_excludes() . ")/i", $file) === 1) {
+        foreach(glob($path.DIRECTORY_SEPARATOR.'*') as $file) {
+            if(preg_match("/({$this->get_preg_excludes()})/i", $file) === 1) {
                 $empty = false;
             } else {
                 $empty &= is_dir($file) && $this->delete_empty_directories_r($file, $log_file);
@@ -688,7 +691,7 @@ class UploadDirectoryCleaner {
         }
 
         if($empty) {
-            fwrite($log_file, 'Deleting Empty Directory: ' . $path . PHP_EOL);
+            fwrite($log_file, "Deleting Empty Directory: {$path}".PHP_EOL);
         }
 
         return $empty && rmdir($path);
@@ -698,15 +701,15 @@ class UploadDirectoryCleaner {
     function format_size_units($bytes)
     {
         if ($bytes >= 1073741824)
-            $bytes = number_format($bytes / 1073741824, 2) . ' GB';
+            $bytes = number_format($bytes / 1073741824, 2).' GB';
         elseif ($bytes >= 1048576)
-            $bytes = number_format($bytes / 1048576, 2) . ' MB';
+            $bytes = number_format($bytes / 1048576, 2).' MB';
         elseif ($bytes >= 1024)
-            $bytes = number_format($bytes / 1024, 2) . ' KB';
+            $bytes = number_format($bytes / 1024, 2).' KB';
         elseif ($bytes > 1)
-            $bytes = $bytes . ' bytes';
+            $bytes = "{$bytes} bytes";
         elseif ($bytes == 1)
-            $bytes = $bytes . ' byte';
+            $bytes = "{$bytes} byte";
         else
             $bytes = '0 bytes';
     
